@@ -1,0 +1,73 @@
+name: Build APK from zip
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:   # Actions tab se "Run workflow" button
+
+permissions:
+  contents: write      # GitHub Release banane ke liye
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Repo mein sirf AutoAlarmVolumeKeeper.zip hai: yahan use khol kar root mein laya jata hai
+      - name: Unzip project
+        run: |
+          unzip -q AutoAlarmVolumeKeeper.zip
+          cp -r AutoAlarmVolumeKeeper/. .
+          ls -la
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.11.1
+
+      - name: Build debug APK
+        run: gradle assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      # ---- Release APK: sirf tab jab keystore secrets set hon ----
+      - name: Prepare signing keystore
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > release.jks
+          cat > keystore.properties <<EOF
+          storeFile=release.jks
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          EOF
+
+      - name: Build signed release APK
+        if: env.KEYSTORE_B64 != ''
+        run: gradle assembleRelease
+
+      - name: Upload release APK
+        if: env.KEYSTORE_B64 != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: app/build/outputs/apk/release/app-release.apk
+
+      - name: Publish GitHub Release
+        if: env.KEYSTORE_B64 != '' && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/app-release.apk
