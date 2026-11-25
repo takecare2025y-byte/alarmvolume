@@ -21,7 +21,7 @@ jobs:
       # Repo mein sirf AutoAlarmVolumeKeeper.zip hai: yahan use khol kar root mein laya jata hai
       - name: Unzip project
         run: |
-          unzip -q AutoAlarmVolumeKeeper.zip
+          unzip -q *.zip
           cp -r AutoAlarmVolumeKeeper/. .
           ls -la
 
